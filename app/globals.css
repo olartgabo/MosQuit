@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #05060a;
+  --foreground: #e8eaf0;
+  --accent: #22d3ee;
+  --accent-glow: rgba(34, 211, 238, 0.35);
+}
+
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 1200px 600px at 50% -20%, rgba(34, 211, 238, 0.08), transparent 60%),
+    radial-gradient(ellipse 800px 500px at 100% 100%, rgba(139, 92, 246, 0.06), transparent 50%),
+    radial-gradient(ellipse 800px 500px at 0% 100%, rgba(239, 68, 68, 0.05), transparent 50%),
+    #05060a;
+  background-attachment: fixed;
+}
+
+/* Subtle grid backdrop */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+/* Monospace for agent streams */
+.font-mono-ui {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', monospace;
+  font-feature-settings: 'ss02', 'cv11';
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 6px;
+  border: 2px solid rgba(0,0,0,0.3);
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, 0.4); }
+
+/* Glow text utility */
+.text-glow {
+  text-shadow: 0 0 20px var(--accent-glow);
+}
+
+/* Pulse animation for infected zones */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  70% { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+.scanline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent, rgba(34,211,238,0.08), transparent);
+  animation: scan 3s linear infinite;
+  pointer-events: none;
+}
+
+/* Mapbox */
+.mapboxgl-map { font-family: 'Inter', sans-serif; }
+.mapboxgl-popup-content {
+  background: rgba(5, 6, 10, 0.92) !important;
+  color: #e8eaf0 !important;
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 20px rgba(34, 211, 238, 0.15) !important;
+  backdrop-filter: blur(20px);
+}
+.mapboxgl-popup-tip {
+  border-top-color: rgba(5, 6, 10, 0.92) !important;
+  border-bottom-color: rgba(5, 6, 10, 0.92) !important;
+}
+.mapboxgl-ctrl-attrib {
+  background: rgba(5,6,10,0.7) !important;
+  color: rgba(232,234,240,0.5) !important;
+}
+.mapboxgl-ctrl-logo { filter: brightness(0.6); }
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
