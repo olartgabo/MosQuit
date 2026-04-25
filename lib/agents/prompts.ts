@@ -37,7 +37,32 @@ export const AGENT_PERSONALITIES: Record<AgentType, AgentPersonality> = {
     color: '#8b5cf6',
     icon: 'shield',
   },
+  environmental_monitor: {
+    type: 'environmental_monitor',
+    name: 'Dr. Reyes, Env Monitor',
+    objective: 'Identify and suppress mosquito breeding sources before the next outbreak cycle.',
+    personality: 'Scientific, patient, upstream-thinking. Speaks in causal chains: X causes Y causes outbreak.',
+    biases: [
+      'Fumigation treats symptoms; source reduction prevents disease',
+      'NDWI > 0.3 combined with recent rain means active breeding is happening now',
+      'Low-elevation zones with poor drainage are generating next week\'s mosquitoes',
+      'Killing adults without eliminating the water source is a treadmill',
+    ],
+    color: '#10b981',
+    icon: 'satellite',
+  },
 };
+
+const ENVIRONMENTAL_MONITOR_CONTEXT = `You are a satellite environmental analyst. Your role is to analyze breeding ground data derived from Sentinel-2 satellite imagery, rainfall records, and topographic data to identify WHERE mosquitoes are actively reproducing — before those zones become outbreak epicenters.
+
+You speak in causal chains. Your analysis will be shared with four human-expert advisors before they propose intervention plans. Your job is to give them ground truth on breeding substrate, not to prescribe fumigation zones.
+
+RULES:
+- Reference zones by numeric id.
+- Cite specific satellite metrics (NDWI, rainfall_mm, elevation) to support each claim.
+- Distinguish between CURRENT breeding activity (high NDWI + recent rain) and STRUCTURAL risk (low elevation + high water proximity).
+- Keep reasoning concise. You are providing a briefing, not a paper.
+- Return valid JSON matching the schema.`;
 
 const BASE_CONTEXT = `You are one of four AI advisors helping a city allocate limited fumigation teams during a dengue outbreak.
 
@@ -51,6 +76,9 @@ RULES:
 - Keep reasoning fields concise (1-3 sentences each). You are a busy expert, not a novelist.`;
 
 export function systemPromptFor(agent: AgentType): string {
+  if (agent === 'environmental_monitor') {
+    return ENVIRONMENTAL_MONITOR_CONTEXT;
+  }
   const p = AGENT_PERSONALITIES[agent];
   return `${BASE_CONTEXT}
 
@@ -122,9 +150,51 @@ export const CONSENSUS_SCHEMA = `You are the neutral synthesizer. Produce ONLY t
   }
 }`;
 
-export function buildZoneBrief(zones: import('@/types').Zone[]): string {
+export function buildZoneBrief(
+  zones: import('@/types').Zone[],
+  cityContext?: { name: string; countryCode: string }
+): string {
+  const header = cityContext
+    ? `LOCATION: ${cityContext.name} (${cityContext.countryCode})\nDISEASE: Dengue fever (Aedes aegypti)\n`
+    : 'LOCATION: Manila, Philippines (default)\nDISEASE: Dengue fever (Aedes aegypti)\n';
   const lines = zones.map(z =>
     `#${z.id} ${z.name} | pop ${z.population.toLocaleString()} | risk ${(z.baseRisk * 100).toFixed(0)}% | infected ${z.infected} | density ${Math.round(z.populationDensity)}/km² | ${z.landUse}${z.hasSensitiveLocation ? ' | SENSITIVE' : ''} | adj [${z.adjacentZoneIds.join(',')}]`
   );
-  return `CITY ZONES (${zones.length}):\n${lines.join('\n')}`;
+  return `${header}CITY ZONES (${zones.length}):\n${lines.join('\n')}`;
 }
+
+export function buildBreedingZoneBrief(
+  zones: import('@/types').Zone[],
+  cityContext?: { name: string; countryCode: string }
+): string {
+  const header = cityContext
+    ? `LOCATION: ${cityContext.name} (${cityContext.countryCode})\n`
+    : '';
+  const lines = zones.map(z => {
+    const ed = z.extendedData;
+    if (ed) {
+      const src = ed.dataSource === 'satellite' ? '[SAT]' : '[SIM]';
+      return `#${z.id} ${z.name} | ndwi ${ed.ndwi.toFixed(2)} | ndvi ${ed.ndvi.toFixed(2)} | rain ${ed.precipitation_14d_mm.toFixed(0)}mm | temp ${ed.temperature_mean_c.toFixed(1)}°C | humidity ${ed.humidity_mean_pct.toFixed(0)}% | breteau ${ed.breteauIndex.toFixed(0)} | class ${ed.wetlandClass} | flight ${ed.flightRadius_m.toFixed(0)}m | ${src}`;
+    }
+    const b = z.breedingRisk;
+    if (b) {
+      const src = b.dataSource === 'satellite' ? '[SAT]' : '[SIM]';
+      return `#${z.id} ${z.name} | ndwi ${b.ndwi.toFixed(2)} | ndvi ${b.ndvi.toFixed(2)} | rain ${b.recentRainfall_mm.toFixed(0)}mm | elev ${b.elevation_m.toFixed(0)}m | breeding ${(b.compositeBreedingScore * 100).toFixed(0)}% ${src}`;
+    }
+    const ef = z.environmentalFactors;
+    return `#${z.id} ${z.name} | humidity ${(ef.humidity * 100).toFixed(0)}% | waterProx ${ef.waterProximity.toFixed(2)} | veg ${ef.vegetation.toFixed(2)} | [NO SAT DATA]`;
+  });
+  return `${header}BREEDING GROUND INTELLIGENCE (${zones.length} zones):\n${lines.join('\n')}`;
+}
+
+export const ENVIRONMENTAL_MONITOR_SCHEMA = `Return ONLY this JSON, no prose before or after:
+{
+  "highRiskBreedingZones": [<zone_id>, ...],
+  "reasoning": "<2-3 sentences citing specific satellite metrics>",
+  "sourceReductionTargets": [
+    { "zoneId": <int>, "primaryIndicator": "ndwi|rainfall|elevation|vegetation", "value": <number>, "urgency": "immediate|planned" }
+  ],
+  "predictedBreedingHotspots": [<zone_id>, ...],
+  "recommendedActions": ["<short action — source-reduction focused>", ...],
+  "confidence": <float 0-1>
+}`;

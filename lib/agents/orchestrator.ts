@@ -1,9 +1,11 @@
 import { getAnthropic, MODEL_ID, cachedSystem } from '@/lib/utils/anthropic';
 import {
   AGENT_PERSONALITIES,
+  buildBreedingZoneBrief,
   buildZoneBrief,
   CONSENSUS_SCHEMA,
   CRITIQUE_SCHEMA,
+  ENVIRONMENTAL_MONITOR_SCHEMA,
   PROPOSAL_SCHEMA,
   RESPONSE_SCHEMA,
   systemPromptFor,
@@ -15,6 +17,7 @@ import type {
   AgentResponse,
   AgentType,
   ConsensusPlan,
+  EnvironmentalAssessment,
   ResourceConstraints,
   Zone,
 } from '@/types';
@@ -22,10 +25,11 @@ import type {
 const AGENT_ORDER: AgentType[] = ['epidemiologist', 'budget', 'operations', 'public_risk'];
 
 export type DebateEvent =
-  | { type: 'phase'; phase: 'proposing' | 'critiquing' | 'responding' | 'consensus' | 'complete' }
+  | { type: 'phase'; phase: 'intelligence' | 'proposing' | 'critiquing' | 'responding' | 'consensus' | 'complete' }
   | { type: 'agent_start'; agent: AgentType }
   | { type: 'agent_delta'; agent: AgentType; delta: string }
   | { type: 'agent_thinking'; agent: AgentType; delta: string }
+  | { type: 'environmental_assessment'; assessment: EnvironmentalAssessment }
   | { type: 'proposal'; proposal: AgentProposal }
   | { type: 'critique'; critique: AgentCritique }
   | { type: 'response'; response: AgentResponse }
@@ -85,15 +89,60 @@ async function streamMessage(params: {
 export async function runDebate(
   zones: Zone[],
   constraints: ResourceConstraints,
-  emit: DebateEmit
-): Promise<{ consensusPlan: ConsensusPlan; proposals: AgentProposal[] }> {
-  const brief = buildZoneBrief(zones);
+  emit: DebateEmit,
+  cityContext?: { name: string; countryCode: string }
+): Promise<{ consensusPlan: ConsensusPlan; proposals: AgentProposal[]; environmentalAssessment: EnvironmentalAssessment | null }> {
+  const brief = buildZoneBrief(zones, cityContext);
   const constraintsBlock = `CONSTRAINTS:
 - Teams available: ${constraints.availableTeams}
 - Budget: $${constraints.budgetTotal.toLocaleString()}
 - Cost per zone: $${constraints.fumigationCostPerZone.toLocaleString()}
 - Max fundable zones: ${Math.floor(constraints.budgetTotal / constraints.fumigationCostPerZone)}
 - Time window: ${constraints.timeWindow}h`;
+
+  // ---------- PHASE 0: ENVIRONMENTAL INTELLIGENCE ----------
+  emit({ type: 'phase', phase: 'intelligence' });
+  emit({ type: 'agent_start', agent: 'environmental_monitor' });
+
+  let environmentalAssessment: EnvironmentalAssessment | null = null;
+  let envIntelligenceBlock = '';
+
+  try {
+    const breedingBrief = buildBreedingZoneBrief(zones, cityContext);
+    const envSystem = systemPromptFor('environmental_monitor');
+    const envUser = `${breedingBrief}
+
+${constraintsBlock}
+
+TASK: Analyze the satellite and environmental data above. Identify which zones are actively generating mosquitoes based on the indicators provided. Your analysis will be shown to four fumigation advisors before they make their proposals. Focus on breeding source identification, not fumigation scheduling.
+
+${ENVIRONMENTAL_MONITOR_SCHEMA}`;
+
+    const { text: envText } = await streamMessage({
+      system: envSystem,
+      user: envUser,
+      agent: 'environmental_monitor',
+      emit,
+      maxTokens: 1200,
+      withThinking: true,
+    });
+
+    try {
+      environmentalAssessment = extractJson<EnvironmentalAssessment>(envText);
+      emit({ type: 'environmental_assessment', assessment: environmentalAssessment });
+
+      envIntelligenceBlock = `
+ENVIRONMENTAL INTELLIGENCE (Dr. Reyes, satellite pre-analysis):
+Breeding hotspots detected: [${environmentalAssessment.predictedBreedingHotspots.join(', ')}]
+Analysis: ${environmentalAssessment.reasoning}
+Source reduction targets: ${environmentalAssessment.sourceReductionTargets.map(t => `Zone ${t.zoneId} (${t.primaryIndicator}=${t.value.toFixed(2)}, ${t.urgency})`).join(', ')}
+NOTE: Consider whether your zone choices also address BREEDING SOURCE zones, not just current infection spread.`;
+    } catch (e) {
+      emit({ type: 'error', message: `Environmental assessment parse failed: ${(e as Error).message}` });
+    }
+  } catch (e) {
+    emit({ type: 'error', message: `Phase 0 failed: ${(e as Error).message}` });
+  }
 
   // ---------- PHASE 1: PROPOSALS (parallel) ----------
   emit({ type: 'phase', phase: 'proposing' });
@@ -103,6 +152,7 @@ export async function runDebate(
       emit({ type: 'agent_start', agent });
       const system = systemPromptFor(agent);
       const user = `${brief}
+${envIntelligenceBlock}
 
 ${constraintsBlock}
 
@@ -317,5 +367,5 @@ ${CONSENSUS_SCHEMA}`;
   emit({ type: 'consensus', plan: consensusPlan });
   emit({ type: 'phase', phase: 'complete' });
 
-  return { consensusPlan, proposals };
+  return { consensusPlan, proposals, environmentalAssessment };
 }

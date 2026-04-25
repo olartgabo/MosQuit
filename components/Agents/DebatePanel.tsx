@@ -10,6 +10,7 @@ const AGENT_ORDER: AgentType[] = ['epidemiologist', 'budget', 'operations', 'pub
 
 const PHASE_LABEL: Record<DebateUIState['phase'], string> = {
   idle: 'Idle',
+  intelligence: 'Phase 0 · Satellite intelligence',
   proposing: 'Phase 1 · Independent proposals',
   critiquing: 'Phase 2 · Cross-critique',
   responding: 'Phase 3 · Defense & compromise',
@@ -25,7 +26,7 @@ interface Props {
 
 export default function DebatePanel({ state, zones, consensus }: Props) {
   const activePhaseIndex = useMemo(() => {
-    const order: DebateUIState['phase'][] = ['idle', 'proposing', 'critiquing', 'responding', 'consensus', 'complete'];
+    const order: DebateUIState['phase'][] = ['idle', 'intelligence', 'proposing', 'critiquing', 'responding', 'consensus', 'complete'];
     return order.indexOf(state.phase);
   }, [state.phase]);
 
@@ -39,18 +40,23 @@ export default function DebatePanel({ state, zones, consensus }: Props) {
           <div className="text-xs text-white/60">{PHASE_LABEL[state.phase]}</div>
         </div>
         <div className="flex gap-1">
-          {['proposing', 'critiquing', 'responding', 'consensus'].map((p, i) => {
-            const order = ['proposing', 'critiquing', 'responding', 'consensus'];
+          {['intelligence', 'proposing', 'critiquing', 'responding', 'consensus'].map((p, i) => {
+            const order = ['intelligence', 'proposing', 'critiquing', 'responding', 'consensus'];
             const currentIdx = order.indexOf(state.phase);
             const done = currentIdx > i || state.phase === 'complete';
             const active = currentIdx === i;
+            const isIntel = p === 'intelligence';
             return (
               <div
                 key={p}
-                className="flex-1 h-1 rounded-full transition-all"
+                className={`h-1 rounded-full transition-all ${isIntel ? 'w-6 flex-none' : 'flex-1'}`}
                 style={{
-                  background: done ? '#22d3ee' : active ? 'linear-gradient(90deg,#22d3ee,#22d3ee66)' : 'rgba(255,255,255,0.08)',
-                  boxShadow: active ? '0 0 10px #22d3ee88' : 'none',
+                  background: done
+                    ? (isIntel ? '#10b981' : '#22d3ee')
+                    : active
+                    ? `linear-gradient(90deg,${isIntel ? '#10b981' : '#22d3ee'},${isIntel ? '#10b98166' : '#22d3ee66'})`
+                    : 'rgba(255,255,255,0.08)',
+                  boxShadow: active ? `0 0 10px ${isIntel ? '#10b98188' : '#22d3ee88'}` : 'none',
                 }}
               />
             );
@@ -60,6 +66,16 @@ export default function DebatePanel({ state, zones, consensus }: Props) {
 
       {/* Agent grid */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Environmental Monitor — full width when active */}
+        {(state.phase === 'intelligence' || state.agents['environmental_monitor']?.state !== 'idle') && (
+          <AgentCard
+            key="environmental_monitor"
+            agent="environmental_monitor"
+            state={state.agents['environmental_monitor']?.state ?? 'idle'}
+            streamText={state.agents['environmental_monitor']?.currentText ?? ''}
+          />
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           {AGENT_ORDER.map((agent) => {
             const a = state.agents[agent];

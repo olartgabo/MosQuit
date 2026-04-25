@@ -9,6 +9,7 @@ export const maxDuration = 300;
 interface DebateBody {
   zones: Zone[];
   constraints: ResourceConstraints;
+  cityContext?: { name: string; countryCode: string };
 }
 
 export async function POST(req: NextRequest) {
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        await runDebate(body.zones, body.constraints, send);
+        await runDebate(body.zones, body.constraints, send, body.cityContext);
       } catch (err) {
         send({ type: 'error', message: (err as Error).message });
       } finally {

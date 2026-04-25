@@ -50,11 +50,16 @@ export function stepDay(
   for (let i = 0; i < next.length; i++) {
     const z = next[i];
     const mult = interventionMultiplier(z, day, params);
+    // Blend infection-state risk with satellite-derived breeding risk when available.
+    // This makes breeding hotspots spread disease faster, rewarding plans that target sources.
+    const effectiveRisk = z.breedingRisk
+      ? z.baseRisk * 0.5 + z.breedingRisk.compositeBreedingScore * 0.5
+      : z.baseRisk;
     const localPressure =
       (z.infected / Math.max(1, z.susceptible + z.infected + z.recovered)) *
       params.baseTransmissionRate *
       (1 + z.populationDensity * params.densitySpreadMultiplier) *
-      z.baseRisk *
+      effectiveRisk *
       mult;
 
     // Internal spread within zone

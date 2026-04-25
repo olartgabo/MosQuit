@@ -9,11 +9,13 @@ import type {
   AgentResponse,
   AgentType,
   ConsensusPlan,
+  EnvironmentalAssessment,
   ResourceConstraints,
   Zone,
 } from '@/types';
 
-const AGENTS: AgentType[] = ['epidemiologist', 'budget', 'operations', 'public_risk'];
+const DEBATE_AGENTS: AgentType[] = ['epidemiologist', 'budget', 'operations', 'public_risk'];
+const ALL_AGENTS: AgentType[] = [...DEBATE_AGENTS, 'environmental_monitor'];
 
 export interface AgentUIState {
   state: 'idle' | 'thinking' | 'speaking' | 'done';
@@ -24,7 +26,8 @@ export interface AgentUIState {
 }
 
 export interface DebateUIState {
-  phase: 'idle' | 'proposing' | 'critiquing' | 'responding' | 'consensus' | 'complete';
+  phase: 'idle' | 'intelligence' | 'proposing' | 'critiquing' | 'responding' | 'consensus' | 'complete';
+  environmentalAssessment?: EnvironmentalAssessment;
   agents: Record<AgentType, AgentUIState>;
   consensus?: ConsensusPlan;
   error?: string;
@@ -32,7 +35,7 @@ export interface DebateUIState {
 
 function initialState(): DebateUIState {
   const agents = {} as Record<AgentType, AgentUIState>;
-  for (const a of AGENTS) {
+  for (const a of ALL_AGENTS) {
     agents[a] = { state: 'idle', currentText: '', critiques: [] };
   }
   return { phase: 'idle', agents };
@@ -60,10 +63,18 @@ export function useDebate() {
         case 'phase': {
           next.phase = evt.phase;
           if (evt.phase === 'proposing' || evt.phase === 'critiquing' || evt.phase === 'responding') {
-            for (const a of AGENTS) {
+            for (const a of DEBATE_AGENTS) {
               next.agents[a] = { ...next.agents[a], state: 'thinking', currentText: '' };
             }
           }
+          return next;
+        }
+        case 'environmental_assessment': {
+          next.environmentalAssessment = evt.assessment;
+          next.agents['environmental_monitor'] = {
+            ...next.agents['environmental_monitor'],
+            state: 'done',
+          };
           return next;
         }
         case 'agent_start': {
@@ -127,7 +138,7 @@ export function useDebate() {
   }, []);
 
   const run = useCallback(
-    async (zones: Zone[], constraints: ResourceConstraints) => {
+    async (zones: Zone[], constraints: ResourceConstraints, cityContext?: { name: string; countryCode: string }) => {
       reset();
       setState(initialState());
       setIsRunning(true);
@@ -138,7 +149,7 @@ export function useDebate() {
         const response = await fetch('/api/agents/debate', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ zones, constraints }),
+          body: JSON.stringify({ zones, constraints, cityContext }),
           signal: controller.signal,
         });
 
@@ -160,5 +171,11 @@ export function useDebate() {
     [handleEvent, reset]
   );
 
-  return { state, isRunning, run, reset };
+  return {
+    state,
+    isRunning,
+    run,
+    reset,
+    environmentalAssessment: state.environmentalAssessment,
+  };
 }
