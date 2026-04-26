@@ -1,4 +1,4 @@
-import { Zone } from '@/types';
+import { Zone, WetlandClass, ExtendedEnvironmentalData } from '@/types';
 
 // Real Manila metro district definitions: centroid [lng, lat], zone size in degrees, and environmental biases
 const ZONE_DEFINITIONS: Array<{
@@ -88,6 +88,9 @@ export function generateMockCity(numZones: number = 20): Zone[] {
     const areaKm2 = Math.PI * (def.size * 111) ** 2; // rough circle area estimate
     const populationDensity = def.population / Math.max(1, areaKm2);
 
+    // Generate extended data for distinct layer visualizations
+    const extendedData = generateExtendedData(def, rng, temperature, humidity);
+
     return {
       id,
       name: def.name,
@@ -99,6 +102,9 @@ export function generateMockCity(numZones: number = 20): Zone[] {
 
       baseRisk,
       environmentalFactors: { temperature, humidity, vegetation, waterProximity },
+
+      // Extended environmental data for data layer views
+      extendedData,
 
       susceptible: def.population - initialInfected,
       infected: initialInfected,
@@ -156,6 +162,70 @@ function seededRandom(seed: number): () => number {
   return () => {
     state = (state * 9301 + 49297) % 233280;
     return state / 233280;
+  };
+}
+
+function deriveWetlandClass(ndwi: number): WetlandClass {
+  if (ndwi > 0.3) return 'open_water';
+  if (ndwi > 0.1) return 'marsh_wetland';
+  if (ndwi > -0.1) return 'moist_vegetation';
+  return 'dry_land';
+}
+
+function generateExtendedData(
+  def: typeof ZONE_DEFINITIONS[0],
+  rng: () => number,
+  temperature: number,
+  humidity: number
+): ExtendedEnvironmentalData {
+  // NDWI: water index based on waterBias (-0.3 to 0.5 range)
+  const ndwi = -0.3 + def.waterBias * 0.7 + (rng() - 0.5) * 0.2;
+
+  // NDVI: vegetation index based on vegBias (-0.1 to 0.8 range)
+  const ndvi = -0.1 + def.vegBias * 0.9 + (rng() - 0.5) * 0.15;
+
+  // Temperature variation: tropical range 26-36°C
+  const temp = 26 + rng() * 10;
+
+  // Humidity: 55-95% for tropical
+  const humidityPct = 55 + rng() * 40;
+
+  // Breteau Index: higher for zones with more water (mosquito breeding)
+  const breteauIndex = Math.floor((5 + def.waterBias * 60 + rng() * 25) * (humidity + 0.3));
+
+  // Precipitation based on humidity
+  const precipitation14d = 20 + rng() * 150 * (humidity + 0.2);
+
+  // Flight radius: 50-400m, higher in favorable conditions
+  const flightRadius = 50 + (def.waterBias + def.vegBias) * 150 + rng() * 100;
+
+  // Composite breeding score
+  const compositeBreedingScore = Math.min(1,
+    (Math.max(0, ndwi + 0.3) / 0.8) * 0.4 +
+    (Math.max(0, ndvi + 0.1) / 0.9) * 0.2 +
+    (breteauIndex / 100) * 0.4
+  );
+
+  return {
+    temperature_mean_c: temp,
+    humidity_mean_pct: humidityPct,
+    soil_moisture_mean: 0.15 + def.waterBias * 0.25 + rng() * 0.1,
+    precipitation_14d_mm: precipitation14d,
+    precipitation_48h_mm: precipitation14d * 0.15 + rng() * 10,
+    windspeed_max_kmh: 10 + rng() * 30,
+    ndwi,
+    ndvi,
+    elevation_m: 5 + rng() * 50,
+    wetlandClass: deriveWetlandClass(ndwi),
+    incubationDays: 7 + Math.floor(rng() * 7),
+    breteauIndex,
+    breteauLevel: breteauIndex < 5 ? 'low' : breteauIndex < 20 ? 'moderate' : 'high',
+    estimatedActiveCases: Math.floor(rng() * 15 * (breteauIndex / 30)),
+    estimatedHistoricalCases: Math.floor(rng() * 50 + breteauIndex * 2),
+    flightRadius_m: flightRadius,
+    compositeBreedingScore,
+    dataSource: 'fallback',
+    fetchedAt: new Date().toISOString(),
   };
 }
 

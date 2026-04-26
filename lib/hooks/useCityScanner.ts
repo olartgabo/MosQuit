@@ -250,7 +250,46 @@ export function useCityScanner() {
     selectSuggestion,
     clearSearch,
     triggerScan,
-    scanViewBbox,
+    setScanViewBbox,
     reset,
-  };
-}
+    };
+    }
+
+    export function useCityReports(zones: Zone[], setZones: React.Dispatch<React.SetStateAction<Zone[]>>) {
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const handleReport = useCallback(async (text: string) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch('/api/agents/interpret-report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text, zones }),
+      });
+
+      if (!res.ok) throw new Error('Failed to interpret report');
+      const { results } = await res.json();
+
+      if (results && results.length > 0) {
+        setZones(prev => prev.map(z => {
+          const match = results.find((r: any) => r.zoneId === z.id);
+          if (match) {
+            return {
+              ...z,
+              baseRisk: Math.min(1, z.baseRisk + match.increase),
+              // We could also add a narrative or a flag here
+            };
+          }
+          return z;
+        }));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsProcessing(false);
+    }
+    }, [zones, setZones]);
+
+    return { handleReport, isProcessing };
+    }
+

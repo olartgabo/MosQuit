@@ -11,9 +11,10 @@ import MetricsDisplay from '@/components/Explainability/MetricsDisplay';
 import { BreedingIntelligencePanel } from '@/components/Intelligence/BreedingIntelligencePanel';
 import DataLayerSelector from '@/components/Map/DataLayerSelector';
 import CitySearchBar from '@/components/Scanner/CitySearchBar';
+import ReportBox from '@/components/Scanner/ReportBox';
 import { useDebate } from '@/lib/hooks/useDebate';
 import { useSimulation } from '@/lib/hooks/useSimulation';
-import { useCityScanner } from '@/lib/hooks/useCityScanner';
+import { useCityScanner, useCityReports } from '@/lib/hooks/useCityScanner';
 import { DATA_LAYER_CONFIG } from '@/lib/config/dataLayers';
 
 export default function Home() {
@@ -23,7 +24,9 @@ export default function Home() {
   const [activeDataLayer, setActiveDataLayer] = useState<DataLayer>('infection');
 
   const scanner = useCityScanner();
-  const { zones, wetlandPoints, scannedCity, scanProgress, searchQuery, setSearchQuery, geocodeSuggestions, isGeocoding, selectedPlace, selectSuggestion, clearSearch, triggerScan, scanViewBbox } = scanner;
+  const { zones, setZones, wetlandPoints, scannedCity, scanProgress, searchQuery, setSearchQuery, geocodeSuggestions, isGeocoding, selectedPlace, selectSuggestion, clearSearch, triggerScan, scanViewBbox } = scanner;
+
+  const { handleReport, isProcessing: reportProcessing } = useCityReports(zones, setZones);
 
   const { state: debate, isRunning: debateRunning, run: runDebate, reset: resetDebate, environmentalAssessment } = useDebate();
 
@@ -131,6 +134,9 @@ export default function Home() {
                 onScan={triggerScan}
                 scanProgress={scanProgress}
               />
+
+              {/* Citizen Reports NLP */}
+              <ReportBox onReport={handleReport} isProcessing={reportProcessing} />
 
               {/* Spacer */}
               <div className="flex-1" />
