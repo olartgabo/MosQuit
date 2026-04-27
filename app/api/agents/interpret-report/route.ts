@@ -36,7 +36,7 @@ If no zones match, return [].`;
     if (content.type !== 'text') throw new Error('Unexpected response type');
     
     // Simple JSON extraction
-    const jsonMatch = content.text.match(/\[.*\]/s);
+    const jsonMatch = content.text.match(/\[[\s\S]*\]/);
     const results = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
 
     return NextResponse.json({ results });
