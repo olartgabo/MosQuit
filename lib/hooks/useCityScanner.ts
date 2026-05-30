@@ -241,6 +241,7 @@ export function useCityScanner() {
     scanProgress,
     scannedCity,
     zones,
+    setZones,
     wetlandPoints,
     searchQuery,
     setSearchQuery,
@@ -250,9 +251,10 @@ export function useCityScanner() {
     selectSuggestion,
     clearSearch,
     triggerScan,
+    scanViewBbox,
     setScanViewBbox,
     reset,
-    };
+  };
     }
 
     export function useCityReports(zones: Zone[], setZones: React.Dispatch<React.SetStateAction<Zone[]>>) {

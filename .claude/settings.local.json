@@ -5,7 +5,11 @@
       "Bash(npx create-next-app:*)",
       "Bash(npm install:*)",
       "WebSearch",
-      "WebFetch(domain:docs.sentinel-hub.com)"
+      "WebFetch(domain:docs.sentinel-hub.com)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(git *)"
     ],
     "deny": [],
     "ask": []
